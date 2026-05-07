@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -72,13 +71,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fileExtention := exts[0] //strings.Replace(mediaType, "image/", "", 1)
-	filePath := filepath.Join(cfg.assetsRoot, videoIDString+fileExtention)
+	//fileExtention := exts[0]
+	//filePath := filepath.Join(cfg.assetsRoot, videoIDString+fileExtention)
 
-	//log.Printf("fileExtention: %s", fileExtention)
-	//log.Printf("filePath: %s", filePath)
+	assetPath := getAssetPath(videoID, mediaType)
+	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
-	newFile, err := os.Create(filePath)
+	newFile, err := os.Create(assetDiskPath)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating image file.", err)
 		return
@@ -91,7 +90,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	thumbnailURL := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, fileExtention)
+	thumbnailURL := cfg.getAssetURL(assetPath) //fmt.Sprintf("http://localhost:%s/assets/%s%s", cfg.port, videoID, fileExtention)
 	dbVideo.ThumbnailURL = &thumbnailURL
 
 	err = cfg.db.UpdateVideo(dbVideo)
