@@ -1,12 +1,12 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"mime"
 	"os"
 	"path/filepath"
-
-	"github.com/google/uuid"
 )
 
 func (cfg apiConfig) ensureAssetsDir() error {
@@ -16,8 +16,13 @@ func (cfg apiConfig) ensureAssetsDir() error {
 	return nil
 }
 
-func getAssetPath(videoID uuid.UUID, mediaType string) string {
-	return videoID.String() + getExtention(mediaType)
+func getAssetPath(mediaType string) string {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	if err != nil {
+		panic("Error generating file name.")
+	}
+	return base64.RawURLEncoding.EncodeToString(key) + getExtention(mediaType)
 }
 
 func getExtention(mediaType string) string {
