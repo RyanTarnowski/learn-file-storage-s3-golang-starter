@@ -7,6 +7,8 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
 func (cfg apiConfig) ensureAssetsDir() error {
@@ -26,10 +28,17 @@ func getAssetPath(mediaType string) string {
 }
 
 func getExtention(mediaType string) string {
+	splitMediaType := strings.Split(mediaType, "/")
 	exts, err := mime.ExtensionsByType(mediaType)
 	if err != nil || len(exts) == 0 {
 		return ".bin"
 	}
+
+	typeIndex := slices.Index(exts, "."+splitMediaType[1])
+	if typeIndex != -1 {
+		return exts[typeIndex]
+	}
+
 	return exts[0]
 }
 
@@ -39,4 +48,8 @@ func (cfg apiConfig) getAssetDiskPath(assetPath string) string {
 
 func (cfg apiConfig) getAssetURL(assetPath string) string {
 	return fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, assetPath)
+}
+
+func (cfg apiConfig) getObjectURL(key string) string {
+	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
 }
