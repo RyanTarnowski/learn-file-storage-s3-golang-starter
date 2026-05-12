@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -52,4 +56,41 @@ func (cfg apiConfig) getAssetURL(assetPath string) string {
 
 func (cfg apiConfig) getObjectURL(key string) string {
 	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+	buf := bytes.Buffer{}
+	cmd.Stdout = &buf
+
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("ffprobe error: %v", err)
+	}
+
+	var data struct {
+		Streams []struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		} `json:"streams"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
+		return "", fmt.Errorf("could not parse ffprobe output: %v", err)
+	}
+
+	if len(data.Streams) == 0 {
+		return "", errors.New("Failed to get stream data")
+	}
+
+	displayRatio := int64(data.Streams[0].Width) / int64(data.Streams[0].Height)
+
+	switch displayRatio {
+	case 1:
+		return "landscape/", nil
+	case 0:
+		return "portrait/", nil
+	default:
+		return "other/", nil
+	}
 }
