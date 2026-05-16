@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -115,7 +121,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := cfg.getObjectURL(assetPath)
+	videoURL := cfg.s3Bucket + "," + assetPath
 	dbVideo.VideoURL = &videoURL
 	err = cfg.db.UpdateVideo(dbVideo)
 	if err != nil {
@@ -123,5 +129,46 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	dbVideo, err = cfg.dbVideoToSignedVideo(dbVideo)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't sign video url", err)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, dbVideo)
+}
+
+func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(s3Client)
+
+	presignedReq, err := presignClient.PresignGetObject(context.Background(),
+		&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		}, s3.WithPresignExpires(expireTime))
+
+	if err != nil {
+		return "", err
+	}
+
+	return presignedReq.URL, nil
+}
+
+func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
+	if video.VideoURL == nil {
+		return video, nil
+	}
+
+	dbVideoURL := strings.Split(*video.VideoURL, ",")
+	if len(dbVideoURL) != 2 {
+		return video, nil
+	}
+
+	presignedURL, err := generatePresignedURL(cfg.s3Client, strings.TrimSpace(dbVideoURL[0]), strings.TrimSpace(dbVideoURL[1]), 15*time.Minute)
+	if err != nil {
+		return video, err
+	}
+	video.VideoURL = &presignedURL
+
+	return video, nil
 }
